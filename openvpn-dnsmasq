@@ -1,0 +1,79 @@
+#! /bin/sh
+#
+# OpenVPN & DNSmasq dispatcher script for NetworkManager
+#
+# Martin Caj <mcaj@suse.cz>
+#
+# $1 is the interface which is brought up or down
+# $2 is the new state of the interface
+
+. /etc/rc.status
+
+# scripts contains nessesery modification for DNSMasq:
+UP="/etc/openvpn/client.up"
+DOWN="/etc/openvpn/client.down"
+
+
+# run scrit up or down when NM needs to modify DNSMasq:
+
+function client_up() {
+
+if  test -x $UP ;then
+	$UP
+else
+	echo "Error: The file $UP is missing !"
+fi
+}
+
+function client_down() {
+
+if  test -x $DOWN ;then
+	$DOWN
+else
+	echo "Error: The file $UP is missing !"
+fi
+}
+
+# run the script only for the tun or tap devices max tun/tap device number is 9 e.g tun9 or tap9
+if [[ "$1" != tun[0-9] ]] && [[ "$1" != tap[0-9] ]];then
+	echo "tun or tap dev not match."
+	exit 0
+fi
+
+case "$2" in
+    up)
+        if  test -x /bin/systemctl ;then
+	#for machine with systemctl"
+	 	if systemctl -q --quiet status openvpn.service  1> /dev/null &&  
+		systemctl -q --quiet status dnsmasq.service 1> /dev/null
+		then
+			client_up
+		fi
+	elif rc_active openvpn && rc_active dnsmasq; then
+	# for machine with init scripts
+		client_up
+	else
+			echo "openvpn and dnsmasq are not running "
+		 
+        fi
+        ;;
+    down)
+        if  test -x /bin/systemctl ;then
+	#for machine with systemctl"
+	 	if systemctl -q --quiet status openvpn.service  1> /dev/null &&  
+		systemctl -q --quiet status dnsmasq.service 1> /dev/null
+		then
+			client_down
+		fi
+	elif rc_active openvpn && rc_active dnsmasq; then
+	# for machine with init scripts
+		client.down
+	else
+			echo "openvpn and dnsmasq are not running "
+		 
+        fi
+	;;	
+    *)
+        exit 0
+        ;;
+esac
