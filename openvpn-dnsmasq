@@ -4,76 +4,84 @@
 #
 # Martin Caj <mcaj@suse.cz>
 #
-# $1 is the interface which is brought up or down
-# $2 is the new state of the interface
 
 . /etc/rc.status
-
 # scripts contains nessesery modification for DNSMasq:
 UP="/etc/openvpn/client.up"
 DOWN="/etc/openvpn/client.down"
 
+# $1 is the interface which is brought up or down
+# $2 is the new state of the interface
+TUN="$1"
+DOIT="$2"
 
 # run scrit up or down when NM needs to modify DNSMasq:
 
 function client_up() {
 
 if  test -x $UP ;then
-	$UP
+	echo "Adding DNS servers for OpenVPN into DNSMasq now."
+	$UP  $TUN
 else
 	echo "Error: The file $UP is missing !"
+	exit 1
 fi
 }
 
 function client_down() {
 
 if  test -x $DOWN ;then
-	$DOWN
+	echo "Removing DNS server for OpenVPN from DNSMasq now."
+	$DOWN $TUN
 else
 	echo "Error: The file $UP is missing !"
+	exit 1
 fi
 }
 
 # run the script only for the tun or tap devices max tun/tap device number is 9 e.g tun9 or tap9
-if [[ "$1" != tun[0-9] ]] && [[ "$1" != tap[0-9] ]];then
-	echo "tun or tap dev not match."
+if [[ "$TUN" != tun[0-9] ]] && [[ "$1" != tap[0-9] ]];then
+	echo "Error: tun or tap dev not match."
 	exit 0
 fi
 
-case "$2" in
-    up)
+case "$DOIT" in
+      vpn-up)
         if  test -x /bin/systemctl ;then
 	#for machine with systemctl"
-	 	if systemctl -q --quiet status openvpn.service  1> /dev/null &&  
-		systemctl -q --quiet status dnsmasq.service 1> /dev/null
-		then
+	# 	if systemctl -q --quiet status openvpn.service  1> /dev/null &&  
+		if nmopenvpn=$(ps faxun|grep nm-openvpn |grep -v grep) && 
+	   	   systemctl -q --quiet status dnsmasq.service 1> /dev/null ;then
 			client_up
+			exit 0
 		fi
-	elif rc_active openvpn && rc_active dnsmasq; then
+	elif nmopenvpn=$(ps faxun|grep nm-openvpn |grep -v grep) && rc_active dnsmasq ;then
 	# for machine with init scripts
-		client_up
+		client_up 
+		exit 0
 	else
-			echo "openvpn and dnsmasq are not running "
+			echo "Info: openvpn and dnsmasq are not running."
+			exit 0
 		 
         fi
         ;;
-    down)
+    vpn-down)
         if  test -x /bin/systemctl ;then
 	#for machine with systemctl"
-	 	if systemctl -q --quiet status openvpn.service  1> /dev/null &&  
-		systemctl -q --quiet status dnsmasq.service 1> /dev/null
-		then
+	 	if nmopenvpn=$(ps faxun|grep nm-openvpn |grep -v grep) &&  
+		systemctl -q --quiet status dnsmasq.service 1> /dev/null ;then
 			client_down
 		fi
 	elif rc_active openvpn && rc_active dnsmasq; then
 	# for machine with init scripts
-		client.down
+		client.down 
 	else
-			echo "openvpn and dnsmasq are not running "
+			echo "Info: openvpn and dnsmasq are not running."
+			exit 0
 		 
         fi
 	;;	
-    *)
+       *)
         exit 0
         ;;
 esac
